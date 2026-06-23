@@ -24,19 +24,19 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
   if (!folder || !folder.isPublished) {
     return {
-      title: "Not Found — ImgWeb",
+      title: "Not Found — GalleryVault",
     };
   }
 
   // Check if password protected
   if (folder.passwordProtected) {
     return {
-      title: "Password Protected Gallery — ImgWeb",
+      title: "Password Protected Gallery — GalleryVault",
       description: "This gallery is protected by a password gate.",
     };
   }
 
-  const title = folder.seoTitle || `${folder.name} — ImgWeb`;
+  const title = folder.seoTitle || `${folder.name} — GalleryVault`;
   const description = folder.seoDescription || folder.description || `Browse the ${folder.name} photo gallery.`;
   const coverUrl = folder.coverImageUrl || "";
 

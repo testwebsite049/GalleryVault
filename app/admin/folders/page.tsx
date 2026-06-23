@@ -391,13 +391,13 @@ export default function AdminFoldersPage() {
               <div>
                 <label className="block text-slate-300 text-xs font-medium mb-1.5">URL Slug (Auto-generated)</label>
                 <div className="relative flex items-center">
-                  <span className="absolute pl-3.5 text-xs text-slate-500 select-none">imgweb.in/</span>
+                  <span className="absolute pl-3.5 text-xs text-slate-500 select-none">galleryvault.in/</span>
                   <input
                     type="text"
                     required
                     value={folderSlug}
                     onChange={(e) => setFolderSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
-                    className="block w-full pl-20 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500/50 transition text-sm font-mono"
+                    className="block w-full pl-28 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500/50 transition text-sm font-mono"
                   />
                 </div>
               </div>

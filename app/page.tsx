@@ -12,7 +12,7 @@ export default function HomePage() {
       <header className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between w-full relative z-10">
         <div className="flex items-center gap-2 font-bold text-xl text-emerald-400">
           <ImageIcon className="h-6 w-6 text-emerald-400 animate-pulse" />
-          <span>ImgWeb</span>
+          <span>GalleryVault</span>
         </div>
         <Link
           href="/admin"
@@ -35,7 +35,7 @@ export default function HomePage() {
         </h1>
         
         <p className="text-slate-400 text-base sm:text-lg leading-relaxed max-w-xl mx-auto">
-          ImgWeb is a premium hosting and publishing platform for photographers. 
+          GalleryVault is a premium hosting and publishing platform for photographers. 
           Group photos into albums, enable custom watermarks, enforce password protection, and share them with the world.
         </p>
 
@@ -76,7 +76,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-slate-900 py-6 text-center text-xs text-slate-600 relative z-10 w-full">
-        <span>© {new Date().getFullYear()} ImgWeb Inc. All rights reserved.</span>
+        <span>© {new Date().getFullYear()} GalleryVault Inc. All rights reserved.</span>
       </footer>
     </div>
   );

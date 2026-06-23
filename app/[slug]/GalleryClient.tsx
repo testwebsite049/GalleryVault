@@ -50,10 +50,10 @@ export default function GalleryClient({ folder, initialImages }: GalleryClientPr
 
   // 1. Initialize Visitor ID and track Page View
   useEffect(() => {
-    let vid = localStorage.getItem("imgweb_visitor_id");
+    let vid = localStorage.getItem("galleryvault_visitor_id");
     if (!vid) {
       vid = Math.random().toString(36).substring(2) + Date.now().toString(36);
-      localStorage.setItem("imgweb_visitor_id", vid);
+      localStorage.setItem("galleryvault_visitor_id", vid);
     }
     setVisitorId(vid);
 
@@ -264,6 +264,17 @@ export default function GalleryClient({ folder, initialImages }: GalleryClientPr
 
                 {/* Content container */}
                 <div className="relative z-10 flex flex-col items-center justify-end h-full">
+                  {/* Cover/Thumbnail Image artwork preview */}
+                  {folder.coverImageUrl && (
+                    <div className="relative h-20 w-20 rounded-2xl overflow-hidden border border-white/10 mb-4 shadow-xl shrink-0 group/cover">
+                      <img
+                        src={folder.coverImageUrl.replace("/upload/", "/upload/w_160,h_160,c_fill,q_auto,f_auto/")}
+                        alt="Album Cover"
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover/cover:scale-105"
+                      />
+                    </div>
+                  )}
+
                   {/* Badge */}
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 text-slate-300 font-semibold text-[10px] uppercase tracking-wider rounded-full border border-white/5">
                     <ImageIcon className="h-3 w-3" />

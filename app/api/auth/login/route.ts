@@ -6,7 +6,7 @@ import { signJWT } from "@/lib/auth/jwt";
 
 // Sync admin account with env configuration dynamically
 async function syncAdminAccount() {
-  const defaultEmail = (process.env.ADMIN_EMAIL || "admin@imgweb.in").toLowerCase().trim();
+  const defaultEmail = (process.env.ADMIN_EMAIL || "admin@galleryvault.in").toLowerCase().trim();
   const plainTextPassword = process.env.ADMIN_PASSWORD || "admin123";
 
   const admin = await Admin.findOne({ email: defaultEmail });

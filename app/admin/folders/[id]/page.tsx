@@ -16,11 +16,92 @@ import {
   Plus,
   Check,
   Copy,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import UploadZone from "@/components/admin/UploadZone";
 import ImageGrid from "@/components/admin/ImageGrid";
 import AnalyticsCharts from "@/components/admin/AnalyticsCharts";
 import { useToast } from "@/components/ui/Toast";
+
+// Client-side image compression utility using HTML5 canvas
+async function compressImage(file: File, maxSize: number): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = async () => {
+        try {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            reject(new Error("Failed to get canvas context."));
+            return;
+          }
+
+          // Initial dimensions
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+
+          let quality = 0.9;
+          let compressedBlob: Blob | null = null;
+          let blobSize = Infinity;
+
+          // Loop 1: Reduce quality first (from 90% down to 20%)
+          while (blobSize > maxSize && quality >= 0.2) {
+            compressedBlob = await new Promise<Blob | null>((res) => {
+              canvas.toBlob((b) => res(b), "image/jpeg", quality);
+            });
+            if (compressedBlob) {
+              blobSize = compressedBlob.size;
+            }
+            quality -= 0.1;
+          }
+
+          // Loop 2: If quality reduction is not enough, scale down the image dimensions (by 20% steps)
+          let scale = 0.8;
+          while (blobSize > maxSize && scale >= 0.2) {
+            canvas.width = img.width * scale;
+            canvas.height = img.height * scale;
+            
+            // Clear and redraw image
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            quality = 0.8;
+            while (blobSize > maxSize && quality >= 0.2) {
+              compressedBlob = await new Promise<Blob | null>((res) => {
+                canvas.toBlob((b) => res(b), "image/jpeg", quality);
+              });
+              if (compressedBlob) {
+                blobSize = compressedBlob.size;
+              }
+              quality -= 0.1;
+            }
+            scale -= 0.2;
+          }
+
+          if (compressedBlob && blobSize <= maxSize) {
+            const compressedFile = new File([compressedBlob], file.name, {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            });
+            resolve(compressedFile);
+          } else {
+            reject(new Error("Failed to compress image below 10MB limit."));
+          }
+        } catch (err: any) {
+          reject(err);
+        }
+      };
+      img.onerror = () => reject(new Error("Failed to load image element."));
+    };
+    reader.onerror = () => reject(new Error("Failed to read file buffer."));
+  });
+}
 
 interface FolderDetail {
   _id: string;
@@ -91,6 +172,62 @@ export default function FolderDetailPage(props: { params: Promise<{ id: string }
   const [seoTitle, setSeoTitle] = useState("");
   const [seoDescription, setSeoDescription] = useState("");
   const [coverImageUrl, setCoverImageUrl] = useState("");
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("File is not an image.");
+      return;
+    }
+
+    setUploadingCover(true);
+    try {
+      let fileToUpload = file;
+      const COMPRESSION_LIMIT = 10 * 1024 * 1024; // 10MB
+      if (fileToUpload.size > COMPRESSION_LIMIT) {
+        toast.info("Image is larger than 10MB. Compressing client-side...");
+        fileToUpload = await compressImage(fileToUpload, COMPRESSION_LIMIT);
+      }
+
+      // 1. Get signed signature
+      const sigRes = await fetch(`/api/admin/upload-signature?folderSlug=${slug}`);
+      if (!sigRes.ok) {
+        throw new Error("Failed to fetch secure upload signature.");
+      }
+      const sigData = await sigRes.json();
+
+      // 2. Upload directly to Cloudinary
+      const formData = new FormData();
+      formData.append("file", fileToUpload);
+      formData.append("api_key", sigData.apiKey);
+      formData.append("timestamp", sigData.timestamp.toString());
+      formData.append("signature", sigData.signature);
+      formData.append("folder", sigData.folder);
+      formData.append("upload_preset", sigData.uploadPreset);
+
+      const uploadUrl = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/image/upload`;
+      const res = await fetch(uploadUrl, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to upload image to Cloudinary.");
+      }
+
+      const cloudinaryRes = await res.json();
+      setCoverImageUrl(cloudinaryRes.secure_url);
+      toast.success("Cover image uploaded successfully! Save settings to apply.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload cover image.");
+    } finally {
+      setUploadingCover(false);
+      e.target.value = "";
+    }
+  };
 
   const loadFolder = async () => {
     try {
@@ -388,35 +525,92 @@ export default function FolderDetailPage(props: { params: Promise<{ id: string }
                 />
               </div>
 
-              {/* Cover Image URL selector */}
-              {images.length > 0 && (
-                <div>
-                  <label className="block text-slate-300 text-xs font-semibold mb-2">Cover Image</label>
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                    {images.map((img) => {
-                      const isCover = coverImageUrl === img.secureUrl;
-                      return (
-                        <button
-                          key={img._id}
-                          type="button"
-                          onClick={() => setCoverImageUrl(img.secureUrl)}
-                          className={`relative aspect-square rounded-lg overflow-hidden border-2 bg-slate-950 shrink-0 transition ${
-                            isCover ? "border-emerald-500 ring-2 ring-emerald-500/20" : "border-slate-800 hover:border-slate-700"
-                          }`}
-                        >
-                          {/* eslint-disable-next-line @typescript-eslint/no-img-element */}
-                          <img src={img.thumbnailUrl} alt="Cover option" className="h-full w-full object-cover" />
-                          {isCover && (
-                            <span className="absolute top-1 right-1 p-0.5 rounded bg-emerald-500 text-slate-950 text-[10px] font-bold">
-                              Cover
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
+              {/* Cover Image URL / Thumbnail Upload selector */}
+              <div>
+                <label className="block text-slate-300 text-xs font-semibold mb-2">Cover / Thumbnail Image</label>
+                
+                {/* Preview and Upload Action */}
+                <div className="flex flex-wrap items-center gap-4 mb-4">
+                  {coverImageUrl ? (
+                    <div className="relative w-28 h-28 rounded-xl overflow-hidden border border-slate-850 bg-slate-950 group">
+                      <img src={coverImageUrl} alt="Current Cover" className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setCoverImageUrl("")}
+                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-rose-400 font-semibold text-xs transition duration-200"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-28 h-28 rounded-xl border border-dashed border-slate-800 bg-slate-950/40 flex flex-col items-center justify-center text-slate-650">
+                      <ImageIcon className="h-8 w-8 mb-1 text-slate-600" />
+                      <span className="text-[10px] text-slate-500">No cover set</span>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCoverUpload}
+                      id="cover-upload-input"
+                      className="hidden"
+                      disabled={uploadingCover}
+                    />
+                    <label
+                      htmlFor="cover-upload-input"
+                      className={`inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-slate-100 rounded-xl text-xs font-semibold cursor-pointer transition ${
+                        uploadingCover ? "opacity-50 pointer-events-none" : ""
+                      }`}
+                    >
+                      {uploadingCover ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-3.5 w-3.5" />
+                          <span>Upload Custom Thumbnail</span>
+                        </>
+                      )}
+                    </label>
+                    <p className="text-[10px] text-slate-500 max-w-xs leading-normal">
+                      Upload any image to use as the folder thumbnail/cover. Auto-compressed if above 10MB.
+                    </p>
                   </div>
                 </div>
-              )}
+
+                {/* Grid of gallery images to pick as cover */}
+                {images.length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-slate-900/50">
+                    <span className="block text-slate-400 text-[11px] font-medium">Or choose from gallery photos:</span>
+                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 max-h-40 overflow-y-auto p-2 bg-slate-950/20 border border-slate-900 rounded-xl">
+                      {images.map((img) => {
+                        const isCover = coverImageUrl === img.secureUrl;
+                        return (
+                          <button
+                            key={img._id}
+                            type="button"
+                            onClick={() => setCoverImageUrl(img.secureUrl)}
+                            className={`relative aspect-square rounded-lg overflow-hidden border-2 bg-slate-950 shrink-0 transition ${
+                              isCover ? "border-emerald-500 ring-2 ring-emerald-500/20" : "border-slate-800 hover:border-slate-700"
+                            }`}
+                          >
+                            <img src={img.thumbnailUrl} alt="Cover option" className="h-full w-full object-cover" />
+                            {isCover && (
+                              <span className="absolute bottom-1 right-1 p-0.5 rounded bg-emerald-500 text-slate-950 text-[8px] font-bold">
+                                Cover
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="bg-slate-900/10 border border-slate-900 p-6 rounded-2xl space-y-6">
@@ -579,7 +773,7 @@ export default function FolderDetailPage(props: { params: Promise<{ id: string }
                       type="text"
                       value={watermarkText}
                       onChange={(e) => setWatermarkText(e.target.value)}
-                      placeholder="e.g. © imgweb.in"
+                      placeholder="e.g. © galleryvault.in"
                       className="block w-full px-4 py-2 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500/50 transition text-sm"
                     />
                   </div>
@@ -652,7 +846,7 @@ export default function FolderDetailPage(props: { params: Promise<{ id: string }
                     type="text"
                     value={seoTitle}
                     onChange={(e) => setSeoTitle(e.target.value)}
-                    placeholder={name ? `${name} — ImgWeb` : "Leave blank to use default Folder Name"}
+                    placeholder={name ? `${name} — GalleryVault` : "Leave blank to use default Folder Name"}
                     className="block w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500/50 transition text-sm"
                   />
                 </div>
@@ -678,12 +872,12 @@ export default function FolderDetailPage(props: { params: Promise<{ id: string }
               <div className="space-y-2">
                 <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Google Search Result</span>
                 <div className="bg-white p-5 rounded-xl border border-slate-200 font-sans text-left text-slate-800">
-                  <span className="text-slate-500 text-xs block font-mono">imgweb.in/{slug || "slug-path"}</span>
+                  <span className="text-slate-500 text-xs block font-mono">galleryvault.in/{slug || "slug-path"}</span>
                   <span className="text-indigo-800 hover:underline text-lg font-medium cursor-pointer block mt-1">
-                    {seoTitle || name || "My Gallery"} — ImgWeb
+                    {seoTitle || name || "My Gallery"} — GalleryVault
                   </span>
                   <span className="text-slate-600 text-xs block mt-1 max-w-xl">
-                    {seoDescription || description || "View this stunning photo gallery on ImgWeb."}
+                    {seoDescription || description || "View this stunning photo gallery on GalleryVault."}
                   </span>
                 </div>
               </div>
@@ -701,7 +895,7 @@ export default function FolderDetailPage(props: { params: Promise<{ id: string }
                     )}
                   </div>
                   <div className="p-4 space-y-1">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-widest block font-mono">imgweb.in</span>
+                    <span className="text-[10px] text-slate-500 uppercase tracking-widest block font-mono">galleryvault.in</span>
                     <span className="text-sm font-bold text-slate-200 block truncate">{seoTitle || name || "My Gallery"}</span>
                     <span className="text-xs text-slate-400 block truncate">{seoDescription || description || "No description set."}</span>
                   </div>

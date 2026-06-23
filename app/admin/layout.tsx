@@ -69,7 +69,7 @@ export default function AdminLayout({
         <div className="h-16 flex items-center px-6 border-b border-slate-800">
           <Link href="/admin" className="flex items-center gap-2 font-bold text-xl text-emerald-400">
             <Image className="h-6 w-6 text-emerald-400 animate-pulse" />
-            <span>ImgWeb Admin</span>
+            <span>GalleryVault Admin</span>
           </Link>
         </div>
 
@@ -111,7 +111,7 @@ export default function AdminLayout({
         <header className="md:hidden flex items-center justify-between h-16 px-4 bg-slate-900 border-b border-slate-800 z-20">
           <Link href="/admin" className="flex items-center gap-2 font-bold text-lg text-emerald-400">
             <Image className="h-5 w-5 text-emerald-400" />
-            <span>ImgWeb Admin</span>
+            <span>GalleryVault Admin</span>
           </Link>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

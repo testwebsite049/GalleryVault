@@ -11,8 +11,8 @@ export interface SignatureResponse {
 
 export function generateUploadSignature(folderSlug: string): SignatureResponse {
   const timestamp = Math.round(new Date().getTime() / 1000);
-  const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET || "imgweb_signed";
-  const folder = `imgweb/${folderSlug}`;
+  const uploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET || "galleryvault_signed";
+  const folder = `galleryvault/${folderSlug}`;
 
   const apiSecret = process.env.CLOUDINARY_API_SECRET;
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
