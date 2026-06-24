@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Image, Lock, Mail, Eye, EyeOff } from "lucide-react";
 
-export default function AdminLoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextRoute = searchParams.get("next") || "/admin";
@@ -123,5 +123,17 @@ export default function AdminLoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <React.Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4 py-12 relative overflow-hidden">
+        <div className="text-slate-400 text-sm animate-pulse">Loading login gate...</div>
+      </div>
+    }>
+      <LoginContent />
+    </React.Suspense>
   );
 }
