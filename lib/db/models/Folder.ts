@@ -24,6 +24,8 @@ export interface IFolder extends Document {
   totalDownloads: number;
   createdAt: Date;
   updatedAt: Date;
+  storageProvider: "cloudinary" | "google-drive" | "both";
+  googleDriveFolderId?: string | null;
 }
 
 const FolderSchema = new Schema<IFolder>(
@@ -60,6 +62,15 @@ const FolderSchema = new Schema<IFolder>(
     totalImages: { type: Number, default: 0 },
     totalViews: { type: Number, default: 0 },
     totalDownloads: { type: Number, default: 0 },
+    storageProvider: {
+      type: String,
+      enum: ["cloudinary", "google-drive", "both"],
+      default: "cloudinary",
+    },
+    googleDriveFolderId: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,

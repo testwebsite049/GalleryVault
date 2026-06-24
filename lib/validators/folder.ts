@@ -11,6 +11,7 @@ export const createFolderSchema = z.object({
     .max(60, "Slug must not exceed 60 characters")
     .regex(slugRegex, "Slug must contain only lowercase letters, numbers, and hyphens"),
   description: z.string().max(500, "Description must not exceed 500 characters").optional(),
+  storageProvider: z.enum(["cloudinary", "google-drive", "both"]).optional(),
 });
 
 export const updateFolderSchema = z.object({

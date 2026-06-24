@@ -168,10 +168,24 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
 
     // 1. Find all images under this folder
     const images = await Image.find({ folderId: folder._id });
-    const publicIds = images.map((img) => img.cloudinaryPublicId);
-
+    
     // 2. Delete images from Cloudinary in batches of 100 (Cloudinary API limit)
+    const publicIds = images
+      .map((img) => img.cloudinaryPublicId)
+      .filter((id): id is string => typeof id === "string" && id !== "");
+
     if (publicIds.length > 0) {
+      try {
+        const { StorageConfig } = await import("@/lib/db/models/StorageConfig");
+        const { configureCloudinary } = await import("@/lib/storage/manager");
+        const config = await StorageConfig.findOne();
+        if (config) {
+          configureCloudinary(config.cloudinaryConfig);
+        }
+      } catch (configErr) {
+        console.warn("Failed to load custom Cloudinary config for deletion, using env values:", configErr);
+      }
+
       const batchSize = 100;
       for (let i = 0; i < publicIds.length; i += batchSize) {
         const batch = publicIds.slice(i, i + batchSize);
@@ -181,6 +195,38 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
           console.error("Failed to delete batch resources from Cloudinary:", cloudinaryError);
           // Continue execution so DB is cleaned up even if Cloudinary fails
         }
+      }
+    }
+
+    // 3. Delete images from Google Drive
+    const driveFileIds = images
+      .map((img) => img.googleDriveFileId)
+      .filter((id): id is string => typeof id === "string" && id !== "");
+
+    if (driveFileIds.length > 0) {
+      try {
+        const { getValidAccessToken, deleteFromDrive } = await import("@/lib/storage/googleDrive");
+        const accessToken = await getValidAccessToken();
+        for (const fileId of driveFileIds) {
+          try {
+            await deleteFromDrive(accessToken, fileId);
+          } catch (driveErr) {
+            console.error(`Failed to delete Google Drive file ${fileId} during folder deletion:`, driveErr);
+          }
+        }
+      } catch (authErr) {
+        console.error("Failed to authenticate with Google Drive for folder cleanup:", authErr);
+      }
+    }
+
+    // 3.5 Delete the Google Drive folder itself if it exists
+    if (folder.googleDriveFolderId) {
+      try {
+        const { getValidAccessToken, deleteFromDrive } = await import("@/lib/storage/googleDrive");
+        const accessToken = await getValidAccessToken();
+        await deleteFromDrive(accessToken, folder.googleDriveFolderId);
+      } catch (driveErr) {
+        console.error(`Failed to delete Google Drive folder ${folder.googleDriveFolderId} during folder deletion:`, driveErr);
       }
     }
 

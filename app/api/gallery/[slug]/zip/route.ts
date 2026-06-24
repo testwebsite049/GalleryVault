@@ -117,7 +117,7 @@ export async function POST(
               archive.append(buffer, { name: img.originalFilename });
             }
           } catch (fetchErr) {
-            console.error(`Failed to fetch image ${img.originalFilename} from Cloudinary:`, fetchErr);
+            console.error(`Failed to fetch image ${img.originalFilename} from storage provider:`, fetchErr);
             // Continue packaging remaining files
           }
         }

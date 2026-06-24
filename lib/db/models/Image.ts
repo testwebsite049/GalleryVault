@@ -3,7 +3,9 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export interface IImage extends Document {
   folderId: mongoose.Types.ObjectId;
   folderSlug: string;
-  cloudinaryPublicId: string;
+  cloudinaryPublicId?: string | null;
+  googleDriveFileId?: string | null;
+  storageProvider: "cloudinary" | "google-drive" | "both";
   secureUrl: string;
   thumbnailUrl: string;
   mediumUrl: string;
@@ -24,7 +26,14 @@ const ImageSchema = new Schema<IImage>(
   {
     folderId: { type: Schema.Types.ObjectId, ref: "Folder", required: true, index: true },
     folderSlug: { type: String, required: true, index: true },
-    cloudinaryPublicId: { type: String, required: true, unique: true },
+    cloudinaryPublicId: { type: String, default: null },
+    googleDriveFileId: { type: String, default: null },
+    storageProvider: {
+      type: String,
+      enum: ["cloudinary", "google-drive", "both"],
+      default: "cloudinary",
+      index: true,
+    },
     secureUrl: { type: String, required: true },
     thumbnailUrl: { type: String, required: true },
     mediumUrl: { type: String, required: true },

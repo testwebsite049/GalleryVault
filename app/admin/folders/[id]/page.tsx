@@ -121,6 +121,7 @@ interface FolderDetail {
   expiresAt?: string | null;
   seoTitle?: string | null;
   seoDescription?: string | null;
+  storageProvider?: string;
 }
 
 interface ImageItem {
@@ -192,34 +193,28 @@ export default function FolderDetailPage(props: { params: Promise<{ id: string }
         fileToUpload = await compressImage(fileToUpload, COMPRESSION_LIMIT);
       }
 
-      // 1. Get signed signature
-      const sigRes = await fetch(`/api/admin/upload-signature?folderSlug=${slug}`);
-      if (!sigRes.ok) {
-        throw new Error("Failed to fetch secure upload signature.");
-      }
-      const sigData = await sigRes.json();
-
-      // 2. Upload directly to Cloudinary
+      // 1. Upload directly to the unified backend route
       const formData = new FormData();
       formData.append("file", fileToUpload);
-      formData.append("api_key", sigData.apiKey);
-      formData.append("timestamp", sigData.timestamp.toString());
-      formData.append("signature", sigData.signature);
-      formData.append("folder", sigData.folder);
-      formData.append("upload_preset", sigData.uploadPreset);
+      formData.append("folderId", folderId);
+      formData.append("folderSlug", slug);
 
-      const uploadUrl = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/image/upload`;
-      const res = await fetch(uploadUrl, {
+      const res = await fetch("/api/admin/images/upload", {
         method: "POST",
         body: formData,
       });
 
       if (!res.ok) {
-        throw new Error("Failed to upload image to Cloudinary.");
+        let errMsg = "Failed to upload cover image.";
+        try {
+          const resJson = await res.json();
+          errMsg = resJson.error?.message || errMsg;
+        } catch (e) {}
+        throw new Error(errMsg);
       }
 
-      const cloudinaryRes = await res.json();
-      setCoverImageUrl(cloudinaryRes.secure_url);
+      const uploadRes = await res.json();
+      setCoverImageUrl(uploadRes.image.secureUrl);
       toast.success("Cover image uploaded successfully! Save settings to apply.");
     } catch (err: any) {
       toast.error(err.message || "Failed to upload cover image.");
@@ -490,7 +485,7 @@ export default function FolderDetailPage(props: { params: Promise<{ id: string }
             <div className="bg-slate-900/10 border border-slate-900 p-6 rounded-2xl space-y-6">
               <h3 className="font-bold text-slate-200 text-lg border-b border-slate-900 pb-3">Basic Information</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-slate-300 text-xs font-semibold mb-2">Folder Name</label>
                   <input
@@ -511,6 +506,13 @@ export default function FolderDetailPage(props: { params: Promise<{ id: string }
                     onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
                     className="block w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500/50 transition text-sm font-mono"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 text-xs font-semibold mb-2">Storage Provider</label>
+                  <div className="capitalize block w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-400 text-sm font-semibold select-none">
+                    {folder?.storageProvider === "google-drive" ? "Google Drive" : folder?.storageProvider || "Cloudinary"}
+                  </div>
                 </div>
               </div>
 

@@ -6,6 +6,11 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. Protect Admin API Routes (/api/admin/*)
+  // Exception: Google OAuth callback must be publicly reachable (Google redirects without a cookie)
+  if (pathname.startsWith("/api/admin/storage/google-oauth-callback")) {
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith("/api/admin")) {
     const token = request.cookies.get("admin_session")?.value;
     const secret = process.env.JWT_SECRET || "";

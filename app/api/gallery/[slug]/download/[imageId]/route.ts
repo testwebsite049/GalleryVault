@@ -90,7 +90,7 @@ export async function GET(
     // 8. Stream the file from Cloudinary and return as direct download response
     const cloudRes = await fetch(image.secureUrl);
     if (!cloudRes.ok) {
-      throw new Error(`Failed to fetch original file from Cloudinary: ${cloudRes.statusText}`);
+      throw new Error(`Failed to fetch original file from storage provider: ${cloudRes.statusText}`);
     }
 
     const fileBuffer = await cloudRes.arrayBuffer();

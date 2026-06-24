@@ -3,22 +3,42 @@ import { cloudinary } from "@/lib/cloudinary/client";
 import { Image } from "@/lib/db/models/Image";
 import { Folder } from "@/lib/db/models/Folder";
 import { dbConnect } from "@/lib/db/connect";
+import { StorageConfig } from "@/lib/db/models/StorageConfig";
+import { getValidAccessToken } from "@/lib/storage/googleDrive";
 
 export async function GET() {
   try {
     await dbConnect();
 
+    let config = await StorageConfig.findOne();
+    if (!config) {
+      config = await StorageConfig.create({
+        activeProvider: "cloudinary",
+        cloudinaryConfig: {
+          cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "",
+          apiKey: process.env.CLOUDINARY_API_KEY || "",
+          apiSecret: process.env.CLOUDINARY_API_SECRET || "",
+          uploadPreset: process.env.CLOUDINARY_UPLOAD_PRESET || "galleryflow",
+        },
+      });
+    }
+
     let usageData;
-    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    const cloudName = config.cloudinaryConfig.cloudName;
+    const apiKey = config.cloudinaryConfig.apiKey;
+    const apiSecret = config.cloudinaryConfig.apiSecret;
 
     const credentialsConfigured =
-      cloudName && cloudName !== "demo" && apiKey && apiSecret;
+      cloudName && apiKey && apiSecret;
 
     if (credentialsConfigured) {
       try {
-        // Query the Cloudinary Admin API
+        // Query the Cloudinary Admin API dynamically
+        cloudinary.config({
+          cloud_name: cloudName,
+          api_key: apiKey,
+          api_secret: apiSecret,
+        });
         usageData = await cloudinary.api.usage();
       } catch (cloudinaryErr) {
         console.warn("Cloudinary API call failed, using mock data:", cloudinaryErr);
@@ -111,7 +131,27 @@ export async function GET() {
       ? usageData.credits.used_percent
       : (creditsLimit > 0 ? (creditsUsage / creditsLimit) * 100 : 0);
 
+    // Fetch Google Drive Storage Quota if connected
+    let driveUsage = null;
+    if (config.googleDriveConfig.refreshToken) {
+      try {
+        const accessToken = await getValidAccessToken();
+        const driveRes = await fetch("https://www.googleapis.com/drive/v3/about?fields=storageQuota", {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+        if (driveRes.ok) {
+          const driveData = await driveRes.json();
+          driveUsage = driveData.storageQuota;
+        }
+      } catch (err) {
+        console.warn("Failed to retrieve Google Drive storage quota:", err);
+      }
+    }
+
     return NextResponse.json({
+      activeProvider: config.activeProvider,
       plan: usageData.plan || "Free",
       storage: {
         usageBytes: storageUsage,
@@ -133,6 +173,11 @@ export async function GET() {
         limit: creditsLimit,
         usedPercentage: creditsPercent,
       },
+      googleDrive: driveUsage ? {
+        usageBytes: Number(driveUsage.usage),
+        limitBytes: Number(driveUsage.limit),
+        usedPercentage: (Number(driveUsage.usage) / Number(driveUsage.limit)) * 100,
+      } : null,
       largestFolders,
     });
   } catch (err) {

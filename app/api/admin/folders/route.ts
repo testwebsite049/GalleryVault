@@ -87,11 +87,55 @@ export async function POST(req: Request) {
       );
     }
 
+    // Handle Google Drive folder creation if selected
+    let googleDriveFolderId: string | null = null;
+    const storageProvider = validated.storageProvider || "cloudinary";
+
+    if (storageProvider === "google-drive" || storageProvider === "both") {
+      try {
+        const { getValidAccessToken, createDriveFolder } = await import("@/lib/storage/googleDrive");
+        const { StorageConfig } = await import("@/lib/db/models/StorageConfig");
+        const config = await StorageConfig.findOne();
+
+        if (!config || !config.googleDriveConfig.refreshToken) {
+          return NextResponse.json(
+            {
+              error: {
+                code: "STORAGE_ERROR",
+                message: "Google Drive is not connected. Please connect it first in Storage settings.",
+                statusCode: 400,
+              },
+            },
+            { status: 400 }
+          );
+        }
+
+        const accessToken = await getValidAccessToken();
+        const parentFolderId = config.googleDriveConfig.parentFolderId || undefined;
+
+        googleDriveFolderId = await createDriveFolder(accessToken, validated.name, parentFolderId);
+      } catch (err: any) {
+        console.error("Failed to create folder on Google Drive:", err);
+        return NextResponse.json(
+          {
+            error: {
+              code: "STORAGE_ERROR",
+              message: `Failed to create folder on Google Drive: ${err.message || err}`,
+              statusCode: 500,
+            },
+          },
+          { status: 500 }
+        );
+      }
+    }
+
     // Create folder
     const folder = await Folder.create({
       name: validated.name,
       slug: validated.slug,
       description: validated.description || "",
+      storageProvider,
+      googleDriveFolderId,
       isPublished: false,
       publishedAt: null,
       passwordProtected: false,

@@ -33,6 +33,7 @@ interface FolderItem {
   totalViews: number;
   totalDownloads: number;
   createdAt: string;
+  storageProvider?: string;
 }
 
 export default function AdminFoldersPage() {
@@ -53,6 +54,20 @@ export default function AdminFoldersPage() {
   const [folderSlug, setFolderSlug] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [isDriveConnected, setIsDriveConnected] = useState(false);
+  const [storageProvider, setStorageProvider] = useState("cloudinary");
+
+  const fetchStorageConfig = async () => {
+    try {
+      const res = await fetch("/api/admin/storage/config");
+      if (res.ok) {
+        const json = await res.json();
+        setIsDriveConnected(json.googleDriveConfig?.isConnected || false);
+      }
+    } catch (err) {
+      console.error("Failed to load storage config:", err);
+    }
+  };
 
   const fetchFolders = async () => {
     setLoading(true);
@@ -73,6 +88,10 @@ export default function AdminFoldersPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchStorageConfig();
+  }, []);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -103,7 +122,7 @@ export default function AdminFoldersPage() {
       const res = await fetch("/api/admin/folders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: folderName, slug: folderSlug }),
+        body: JSON.stringify({ name: folderName, slug: folderSlug, storageProvider }),
       });
 
       const json = await res.json();
@@ -115,6 +134,7 @@ export default function AdminFoldersPage() {
       setIsModalOpen(false);
       setFolderName("");
       setFolderSlug("");
+      setStorageProvider("cloudinary");
       fetchFolders(); // Reload folders
     } catch (err: any) {
       setCreateError(err.message || "An error occurred.");
@@ -268,9 +288,22 @@ export default function AdminFoldersPage() {
                         )}
                       </div>
                       <div className="min-w-0">
-                        <Link href={`/admin/folders/${folder._id}`} className="font-bold text-slate-100 hover:text-emerald-400 transition truncate block">
-                          {folder.name}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link href={`/admin/folders/${folder._id}`} className="font-bold text-slate-100 hover:text-emerald-400 transition truncate block">
+                            {folder.name}
+                          </Link>
+                          {folder.storageProvider && (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider select-none shrink-0 ${
+                              folder.storageProvider === "google-drive"
+                                ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                : folder.storageProvider === "cloudinary"
+                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                : "bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                            }`}>
+                              {folder.storageProvider === "google-drive" ? "Drive" : folder.storageProvider}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-xs text-slate-500 block truncate max-w-xs">{folder.description || "No description"}</span>
                       </div>
                     </td>
@@ -400,6 +433,29 @@ export default function AdminFoldersPage() {
                     className="block w-full pl-28 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500/50 transition text-sm font-mono"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 text-xs font-medium mb-1.5">Storage Provider</label>
+                <select
+                  value={storageProvider}
+                  onChange={(e) => setStorageProvider(e.target.value)}
+                  className="block w-full px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-slate-200 focus:outline-none focus:border-emerald-500/50 transition text-sm cursor-pointer"
+                >
+                  <option value="cloudinary">Cloudinary</option>
+                  {isDriveConnected ? (
+                    <option value="google-drive">Google Drive</option>
+                  ) : (
+                    <option value="google-drive" disabled>
+                      Google Drive (Not Connected)
+                    </option>
+                  )}
+                </select>
+                {!isDriveConnected && (
+                  <p className="text-[10px] text-amber-500 mt-1 font-sans">
+                    * Google Drive is not connected. Configure it in Storage settings to enable.
+                  </p>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-2">

@@ -4,7 +4,7 @@ import { Image } from "@/lib/db/models/Image";
 import { Folder } from "@/lib/db/models/Folder";
 import { updateImageSchema } from "@/lib/validators/image";
 import { ZodError } from "zod";
-import { cloudinary } from "@/lib/cloudinary/client";
+import { deleteImage } from "@/lib/storage/manager";
 
 // PATCH /api/admin/images/[id]
 export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
@@ -87,12 +87,16 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
 
     const folderId = image.folderId;
 
-    // 1. Delete image from Cloudinary
+    // 1. Delete image from storage provider(s)
     try {
-      await cloudinary.uploader.destroy(image.cloudinaryPublicId);
-    } catch (cloudinaryError) {
-      console.error("Failed to delete asset from Cloudinary:", cloudinaryError);
-      // Proceed to clean DB even if Cloudinary fails
+      await deleteImage(
+        image.storageProvider || "cloudinary",
+        image.cloudinaryPublicId,
+        image.googleDriveFileId
+      );
+    } catch (storageError) {
+      console.error("Failed to delete asset from storage provider:", storageError);
+      // Proceed to clean DB even if storage delete fails
     }
 
     // 2. Delete image document from MongoDB

@@ -139,24 +139,14 @@ export default function UploadZone({ folderId, folderSlug, onUploadComplete }: U
         }
       }
 
-      // 1. Get signed signature from backend
-      const sigRes = await fetch(`/api/admin/upload-signature?folderSlug=${folderSlug}`);
-      if (!sigRes.ok) {
-        throw new Error("Failed to fetch secure upload signature.");
-      }
-      const sigData = await sigRes.json();
-
-      // 2. Upload directly to Cloudinary
+      // 1. Upload directly to the unified backend route
       const formData = new FormData();
       formData.append("file", fileToUpload);
-      formData.append("api_key", sigData.apiKey);
-      formData.append("timestamp", sigData.timestamp.toString());
-      formData.append("signature", sigData.signature);
-      formData.append("folder", sigData.folder);
-      formData.append("upload_preset", sigData.uploadPreset);
+      formData.append("folderId", folderId);
+      formData.append("folderSlug", folderSlug);
 
       const xhr = new XMLHttpRequest();
-      const uploadUrl = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/image/upload`;
+      const uploadUrl = `/api/admin/images/upload`;
 
       // Wrap XHR in Promise to handle async upload flow nicely with abort controller
       const uploadPromise = new Promise<any>((resolve, reject) => {
@@ -176,11 +166,16 @@ export default function UploadZone({ folderId, folderSlug, onUploadComplete }: U
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve(JSON.parse(xhr.responseText));
           } else {
-            reject(new Error(`Cloudinary upload failed: ${xhr.statusText}`));
+            let errMsg = `Upload failed with status: ${xhr.status}`;
+            try {
+              const resJson = JSON.parse(xhr.responseText);
+              errMsg = resJson.error?.message || errMsg;
+            } catch (e) {}
+            reject(new Error(errMsg));
           }
         };
 
-        xhr.onerror = () => reject(new Error("Network error during Cloudinary upload"));
+        xhr.onerror = () => reject(new Error("Network error during file upload"));
         xhr.onabort = () => reject(new Error("Upload cancelled by administrator"));
 
         controller.signal.addEventListener("abort", () => {
@@ -190,30 +185,7 @@ export default function UploadZone({ folderId, folderSlug, onUploadComplete }: U
         xhr.send(formData);
       });
 
-      const cloudinaryRes = await uploadPromise;
-
-      // 3. Save metadata to MongoDB
-      const saveRes = await fetch("/api/admin/images", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          folderId,
-          folderSlug,
-          cloudinaryPublicId: cloudinaryRes.public_id,
-          secureUrl: cloudinaryRes.secure_url,
-          thumbnailUrl: cloudinaryRes.secure_url.replace("/upload/", "/upload/w_400,h_400,c_fill,q_auto,f_auto/"),
-          mediumUrl: cloudinaryRes.secure_url.replace("/upload/", "/upload/w_800,q_auto,f_auto/"),
-          originalFilename: fileObj.name,
-          format: cloudinaryRes.format,
-          width: cloudinaryRes.width,
-          height: cloudinaryRes.height,
-          fileSize: cloudinaryRes.bytes,
-        }),
-      });
-
-      if (!saveRes.ok) {
-        throw new Error("Cloudinary success, but failed to save record in database.");
-      }
+      await uploadPromise;
 
       setFiles((prev) =>
         prev.map((f) => (f.id === fileObj.id ? { ...f, status: "success", progress: 100 } : f))
